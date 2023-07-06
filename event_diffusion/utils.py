@@ -4,6 +4,7 @@ Helper utility functions to implement DDPM
 """
 
 import torch
+from typing import Dict
 
 def ddpm_schedules(beta1: float, beta2: float, T: int) -> Dict[str, torch.Tensor]:
     """

@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+
+[project]
+name = "event_diffusion"
+version = "0.0.1"
+description = "Event diffusion"
+readme = "README.md"
+dependencies = [ "torch", ]
+
+[tool.setuptools.packages]
+find = {} 
