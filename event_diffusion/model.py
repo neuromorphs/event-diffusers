@@ -15,6 +15,7 @@ blk = lambda ic, oc: nn.Sequential(
     nn.LeakyReLU(),
 )
 
+
 class DDPM(nn.Module):
     def __init__(
         self,
@@ -39,7 +40,9 @@ class DDPM(nn.Module):
         Makes forward diffusion x_t, and tries to guess epsilon value from x_t using autoencoder_model.
         """
 
-        t = torch.randint(1, self.n_T, (x.shape[0],)).to(x.device)  # t ~ Uniform(0, n_T)
+        t = torch.randint(1, self.n_T, (x.shape[0],)).to(
+            x.device
+        )  # t ~ Uniform(0, n_T)
         eps = torch.randn_like(x)  # eps ~ N(0, 1)
 
         x_t = (
@@ -59,11 +62,9 @@ class DDPM(nn.Module):
         for i in range(self.n_T, 0, -1):
             z = torch.randn(n_sample, *size).to(device) if i > 1 else 0
             eps = self.autoencoder_model(x_i, i / self.n_T)
-            x_i = (
-                (1 / torch.sqrt(self.alpha_t[i])) *
-                (x_i - eps * (1 - self.alpha_t[i]) / torch.sqrt(1 - self.alphabar_t[i]))
-                + self.sqrt_beta_t[i] * z
-            )
+            x_i = (1 / torch.sqrt(self.alpha_t[i])) * (
+                x_i - eps * (1 - self.alpha_t[i]) / torch.sqrt(1 - self.alphabar_t[i])
+            ) + self.sqrt_beta_t[i] * z
 
         return x_i
 
