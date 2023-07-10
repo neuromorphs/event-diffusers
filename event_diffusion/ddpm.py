@@ -10,10 +10,14 @@ class DDPM(nn.Module):
         autoencoder_model: nn.Module,
         betas: Tuple[float, float],
         n_T: int,
+        device: str, 
         criterion: nn.Module = nn.MSELoss(),
+        drop_prob=0.1
     ) -> None:
         super(DDPM, self).__init__()
         self.autoencoder_model = autoencoder_model
+        self.device = device
+        self.drop_prob = drop_prob
 
         # register_buffer allows us to freely access these tensors by name. It helps device placement.
         for k, v in ddpm_schedules(betas[0], betas[1], n_T).items():
@@ -22,7 +26,7 @@ class DDPM(nn.Module):
         self.n_T = n_T
         self.criterion = criterion
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """
         Implements Algorithm 1 from the paper.
         Makes forward diffusion x_t, and tries to guess epsilon value from x_t using autoencoder_model.
@@ -36,7 +40,10 @@ class DDPM(nn.Module):
             + torch.sqrt(1 - self.alphabar_t[t, None, None, None]) * eps
         )
 
-        return self.criterion(eps, self.autoencoder_model(x_t))#, t / self.n_T))
+        # dropout context with some probability
+        context_mask = torch.bernoulli(torch.zeros_like(y)+self.drop_prob).to(self.device)
+
+        return self.criterion(eps, self.autoencoder_model(x_t, t / self.n_T, ctx=y, context_mask=context_mask))
 
     def sample(self, n_sample: int, size, device) -> torch.Tensor:
         """

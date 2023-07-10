@@ -77,6 +77,22 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 
+class EmbedFC(nn.Module):
+    def __init__(self, input_dim, emb_dim):
+        super(EmbedFC, self).__init__()
+        self.input_dim = input_dim
+        layers = [
+            nn.Linear(input_dim, emb_dim),
+            nn.GELU(),
+            nn.Linear(emb_dim, emb_dim),
+        ]
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = x.view(-1, self.input_dim)
+        return self.model(x)
+
+
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False):
         super(UNet, self).__init__()
@@ -94,17 +110,48 @@ class UNet(nn.Module):
         self.up2 = (Up(512, 256 // factor, bilinear))
         self.up3 = (Up(256, 128 // factor, bilinear))
         self.up4 = (Up(128, 64, bilinear))
-        self.outc = (OutConv(64, n_classes))
+        self.outc = (OutConv(64, 1))#n_classes))
 
-    def forward(self, x):
+        n_feat = 64
+        self.n_feat = n_feat
+        self.timeembed1 = EmbedFC(1, 16*n_feat)
+        self.timeembed2 = EmbedFC(1, 8*n_feat)
+        self.timeembed3 = EmbedFC(1, 4*n_feat)
+        self.timeembed4 = EmbedFC(1, 2*n_feat)
+        self.contextembed1 = EmbedFC(n_classes, 16*n_feat)
+        self.contextembed2 = EmbedFC(n_classes, 8*n_feat)
+        self.contextembed3 = EmbedFC(n_classes, 4*n_feat)
+        self.contextembed4 = EmbedFC(n_classes, 2*n_feat)
+
+    def forward(self, x, t, ctx, context_mask):
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
+
+        ctx = nn.functional.one_hot(ctx, num_classes=self.n_classes).type(torch.float)
+
+        # mask out context if context_mask == 1
+        context_mask = context_mask[:, None]
+        context_mask = context_mask.repeat(1,self.n_classes)
+        context_mask = (-1*(1-context_mask)) # need to flip 0 <-> 1
+        ctx = ctx * context_mask
+        
+        # embed context, time step
+        cemb1 = self.contextembed1(ctx).view(-1, self.n_feat * 16, 1, 1)
+        temb1 = self.timeembed1(t).view(-1, self.n_feat * 16, 1, 1)
+        cemb2 = self.contextembed2(ctx).view(-1, self.n_feat * 8, 1, 1)
+        temb2 = self.timeembed2(t).view(-1, self.n_feat * 8, 1, 1)
+        cemb3 = self.contextembed3(ctx).view(-1, self.n_feat * 4, 1, 1)
+        temb3 = self.timeembed3(t).view(-1, self.n_feat * 4, 1, 1)
+        cemb4 = self.contextembed4(ctx).view(-1, self.n_feat * 2, 1, 1)
+        temb4 = self.timeembed4(t).view(-1, self.n_feat * 2, 1, 1)
+
+        x = self.up1(x5*cemb1 + temb1, x4)
+        x = self.up2(x*cemb2 + temb2, x3)
+        x = self.up3(x*cemb3 + temb3, x2)
+        x = self.up4(x*cemb4 + temb4, x1)
+        # import ipdb; ipdb.set_trace()
         logits = self.outc(x)
         return logits
