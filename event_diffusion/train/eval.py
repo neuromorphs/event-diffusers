@@ -21,6 +21,7 @@ def evaluate(config, epoch, pipeline):
     images = pipeline(
         batch_size=config.eval_batch_size,
         generator=torch.manual_seed(config.seed),
+        label=config.eval_label,
         num_inference_steps=config.num_eval_inference_steps,
     ).images
 

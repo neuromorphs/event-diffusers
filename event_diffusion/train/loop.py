@@ -27,6 +27,7 @@ def train_loop(
         gradient_accumulation_steps=config.gradient_accumulation_steps,
         log_with="tensorboard",
         project_dir=os.path.join(config.output_dir, "logs"),
+        split_batches=config.split_batches,
     )
     if accelerator.is_main_process:
         if config.push_to_hub:
