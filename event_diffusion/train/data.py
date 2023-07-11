@@ -4,6 +4,7 @@ from pathlib import Path
 
 import tonic
 import torch
+import torchvision
 from datasets import Dataset, load_dataset, load_from_disk
 from torchvision import transforms
 
@@ -80,9 +81,13 @@ trainset = tonic.datasets.DVSGesture("data", train=True)
 
 frame_time = 200_000  # microseconds
 slicer = tonic.slicers.SliceByTime(time_window=frame_time)
-transform = tonic.transforms.ToTimesurface(
-    sensor_size=trainset.sensor_size, dt=frame_time, tau=frame_time / 10
-)
+transform = tonic.transforms.Compose([
+    tonic.transforms.ToTimesurface(
+        sensor_size=trainset.sensor_size, dt=frame_time, tau=frame_time / 10
+    ),
+    lambda x: torch.as_tensor(x),
+    torchvision.transforms.Normalize([0.5], [0.5]),
+])
 gesture_dataset = tonic.SlicedDataset(
     trainset,
     slicer=slicer,
@@ -96,7 +101,7 @@ if gesture_path.exists():
 else:
     data_list = [
         {
-            "data": torch.squeeze(torch.Tensor(d[0])),
+            "data": torch.squeeze(d[0]),
             "label": torch.squeeze(
                 torch.nn.functional.one_hot(torch.as_tensor([d[1]]), num_classes=11)
             ),
