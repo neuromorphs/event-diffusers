@@ -3,27 +3,13 @@ from pathlib import Path
 
 import torch
 from accelerate import Accelerator
-from diffusers import DDPMPipeline
 from huggingface_hub import Repository
 from tqdm.auto import tqdm
 
 from ..utils import get_full_repo_name
+from .embed import embed
 from .eval import evaluate
-
-
-def embed(model, labels, device):
-    """Embed the labels through a simple model.
-
-    Arguments:
-        model: A torch.nn.Module
-        labels: A tensor of shape (batch_size, num_labels)
-
-    Returns:
-        A tensor of shape (batch_size, embedding_size)
-    """
-    model = model.to(device)
-    emb = model(labels.to(device)).unsqueeze(1)
-    return emb
+from .pipeline import DDPMConditionalPipeline
 
 
 def train_loop(
@@ -114,8 +100,11 @@ def train_loop(
 
         # After each epoch you optionally sample some demo images with evaluate() and save the model
         if accelerator.is_main_process:
-            pipeline = DDPMPipeline(
-                unet=accelerator.unwrap_model(model), scheduler=noise_scheduler
+            pipeline = DDPMConditionalPipeline(
+                unet=accelerator.unwrap_model(model),
+                scheduler=noise_scheduler,
+                embed_model=embed_model,
+                embed_device=accelerator.device,
             )
 
             if (

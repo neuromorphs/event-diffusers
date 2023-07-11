@@ -1,6 +1,21 @@
 import torch
 
 
+def embed(model, labels, device):
+    """Embed the labels through a simple model.
+
+    Arguments:
+        model: A torch.nn.Module
+        labels: A tensor of shape (batch_size, num_labels)
+
+    Returns:
+        A tensor of shape (batch_size, embedding_size)
+    """
+    model = model.to(device)
+    emb = model(labels.to(device)).unsqueeze(1)
+    return emb
+
+
 class EmbedFC(torch.nn.Module):
     def __init__(self, input_dim, emb_dim):
         super(EmbedFC, self).__init__()
