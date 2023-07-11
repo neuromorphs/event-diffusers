@@ -46,7 +46,7 @@ def train_loop(
         progress_bar.set_description(f"Epoch {epoch}")
 
         for _, batch in enumerate(train_dataloader):
-            clean_images = batch["images"]
+            clean_images = batch["data"]
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape).to(clean_images.device)
             bs = clean_images.shape[0]

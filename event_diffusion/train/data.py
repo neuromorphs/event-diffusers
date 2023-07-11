@@ -92,11 +92,18 @@ gesture_dataset = tonic.SlicedDataset(
 
 if gesture_path.exists():
     gesture_dataset = load_from_disk(gesture_path)
+    gesture_dataset = gesture_dataset.with_format("torch")
 else:
     data_list = [
-        {"data": torch.Tensor(d[0]), "label": torch.Tensor(d[1])}
+        {
+            "data": torch.squeeze(torch.Tensor(d[0])),
+            "label": torch.squeeze(
+                torch.nn.functional.one_hot(torch.as_tensor([d[1]]), num_classes=11)
+            ),
+        }
         for d in gesture_dataset
     ]
     hf_dataset = Dataset.from_list(data_list)
+    hf_dataset = hf_dataset.with_format("torch")
     hf_dataset.save_to_disk(gesture_path)
     gesture_dataset = hf_dataset

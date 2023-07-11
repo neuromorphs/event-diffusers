@@ -13,8 +13,11 @@ from event_diffusion.train.model import model
 dataset = gesture_dataset
 
 sample_image = dataset[0]["data"]
-print("Input shape:", torch.Tensor(sample_image).shape)
-print("Output shape:", model(torch.Tensor(sample_image), timestep=0).sample.shape)
+print("Input shape:", torch.Tensor(sample_image.unsqueeze(0)).shape)
+print(
+    "Output shape:",
+    model(torch.Tensor(sample_image.unsqueeze(0)), timestep=0).sample.shape,
+)
 
 config = TrainingConfig()
 
