@@ -3,10 +3,10 @@ Functionality to train a Vinalla DDPM model on event data
 """
 
 import tonic
-from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image, make_grid
+from torchvision.utils import make_grid, save_image
+from tqdm import tqdm
 
 from event_diffusion.model import DDPM, AutoEncoderModel
 
