@@ -1,5 +1,6 @@
 import glob
 
+import datasets
 import torch
 from diffusers import DDPMScheduler
 from diffusers.optimization import get_cosine_schedule_with_warmup
@@ -11,6 +12,7 @@ from event_diffusion.train.embed import EmbedFC
 from event_diffusion.train.loop import train_loop
 from event_diffusion.train.model import condition_model, model
 
+# dataset = datasets.Dataset.from_dict(gesture_dataset[:16]).with_format("torch")
 dataset = gesture_dataset
 
 embed_model = EmbedFC(11, 1280)

@@ -21,6 +21,7 @@ def evaluate(config, epoch, pipeline):
     images = pipeline(
         batch_size=config.eval_batch_size,
         generator=torch.manual_seed(config.seed),
+        num_inference_steps=config.num_eval_inference_steps,
     ).images
 
     # Make a grid out of the images
