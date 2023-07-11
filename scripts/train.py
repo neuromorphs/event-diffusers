@@ -7,16 +7,28 @@ from PIL import Image
 
 from event_diffusion.train.config import TrainingConfig
 from event_diffusion.train.data import butterfly_dataset, davis_dataset, gesture_dataset
+from event_diffusion.train.embed import EmbedFC
 from event_diffusion.train.loop import train_loop
-from event_diffusion.train.model import model
+from event_diffusion.train.model import condition_model, model
 
 dataset = gesture_dataset
 
+embed_model = EmbedFC(11, 1280)
+
 sample_image = dataset[0]["data"]
+sample_label = dataset[0]["label"]
+
+emb = embed_model(sample_label.unsqueeze(0)).unsqueeze(0)
+
 print("Input shape:", torch.Tensor(sample_image.unsqueeze(0)).shape)
 print(
     "Output shape:",
-    model(torch.Tensor(sample_image.unsqueeze(0)), timestep=0).sample.shape,
+    condition_model(
+        torch.Tensor(sample_image.unsqueeze(0)),
+        encoder_hidden_states=emb,
+        # added_cond_kwargs={"image_embeds": emb},
+        timestep=0,
+    ).sample.shape,
 )
 
 config = TrainingConfig()
@@ -34,4 +46,12 @@ lr_scheduler = get_cosine_schedule_with_warmup(
     num_training_steps=(len(train_dataloader) * config.num_epochs),
 )
 
-train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
+train_loop(
+    config,
+    condition_model,
+    noise_scheduler,
+    optimizer,
+    train_dataloader,
+    lr_scheduler,
+    embed_model,
+)

@@ -13,7 +13,7 @@ class TrainingConfig:
     save_image_epochs = 1
     save_model_epochs = 30
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = "unconditional-time-surface"
+    output_dir = "conditional-event-diffusion"  # where to save the trained model
 
     push_to_hub = False  # whether to upload the saved model to the HF Hub
     hub_private_repo = False

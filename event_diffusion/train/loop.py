@@ -11,8 +11,29 @@ from ..utils import get_full_repo_name
 from .eval import evaluate
 
 
+def embed(model, labels, device):
+    """Embed the labels through a simple model.
+
+    Arguments:
+        model: A torch.nn.Module
+        labels: A tensor of shape (batch_size, num_labels)
+
+    Returns:
+        A tensor of shape (batch_size, embedding_size)
+    """
+    model = model.to(device)
+    emb = model(labels.to(device)).unsqueeze(1)
+    return emb
+
+
 def train_loop(
-    config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler
+    config,
+    model,
+    noise_scheduler,
+    optimizer,
+    train_dataloader,
+    lr_scheduler,
+    embed_model=None,
 ):
     # Initialize accelerator and tensorboard logging
     accelerator = Accelerator(
@@ -47,6 +68,8 @@ def train_loop(
 
         for _, batch in enumerate(train_dataloader):
             clean_images = batch["data"]
+            labels = batch["label"]
+            emb = embed(embed_model, labels, accelerator.device)
             # Sample noise to add to the images
             noise = torch.randn(clean_images.shape).to(clean_images.device)
             bs = clean_images.shape[0]
@@ -65,7 +88,12 @@ def train_loop(
 
             with accelerator.accumulate(model):
                 # Predict the noise residual
-                noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                noise_pred = model(
+                    noisy_images,
+                    timesteps,
+                    return_dict=False,
+                    encoder_hidden_states=emb,
+                )[0]
                 loss = torch.nn.functional.mse_loss(noise_pred, noise)
                 accelerator.backward(loss)
 
