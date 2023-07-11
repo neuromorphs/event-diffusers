@@ -16,6 +16,7 @@ diffusers = "^0.18.1"
 accelerate = "^0.20.3"
 datasets = "^2.13.1"
 tensorboard = "^2.13.0"
+chardet = "^5.1.0"
 
 
 [tool.poetry.group.dev.dependencies]
