@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import torch
+from diffusers import DDPMPipeline
 from accelerate import Accelerator
 from huggingface_hub import Repository
 from tqdm.auto import tqdm
@@ -55,10 +56,11 @@ def train_loop(
 
         for _, batch in enumerate(train_dataloader):
             clean_images = batch["data"]
-            labels = batch["label"]
-            emb = embed(embed_model, labels, accelerator.device)
+            if config.conditional:
+                labels = batch["label"]
+                emb = embed(embed_model, labels, accelerator.device)
             # Sample noise to add to the images
-            noise = torch.randn(clean_images.shape).to(clean_images.device)
+            noise = torch.randn(clean_images.shape).to(clean_images.device) / 2.5
             bs = clean_images.shape[0]
 
             # Sample a random timestep for each image
@@ -74,13 +76,17 @@ def train_loop(
             noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
 
             with accelerator.accumulate(model):
-                # Predict the noise residual
-                noise_pred = model(
-                    noisy_images,
-                    timesteps,
-                    return_dict=False,
-                    encoder_hidden_states=emb,
-                )[0]
+                if config.conditional:
+                    # Predict the noise residual
+                    noise_pred = model(
+                        noisy_images,
+                        timesteps,
+                        return_dict=False,
+                        encoder_hidden_states=emb,
+                    )[0]
+                else:
+                    # Predict the noise residual
+                    noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
                 loss = torch.nn.functional.mse_loss(noise_pred, noise)
                 accelerator.backward(loss)
 
@@ -101,12 +107,18 @@ def train_loop(
 
         # After each epoch you optionally sample some demo images with evaluate() and save the model
         if accelerator.is_main_process:
-            pipeline = DDPMConditionalPipeline(
-                unet=accelerator.unwrap_model(model),
-                scheduler=noise_scheduler,
-                embed_model=embed_model,
-                embed_device=accelerator.device,
-            )
+            if config.conditional:
+                pipeline = DDPMConditionalPipeline(
+                    unet=accelerator.unwrap_model(model),
+                    scheduler=noise_scheduler,
+                    embed_model=embed_model,
+                    embed_device=accelerator.device,
+                )
+            else:
+                pipeline = DDPMPipeline(
+                    unet=accelerator.unwrap_model(model),
+                    scheduler=noise_scheduler,
+                )
 
             if (
                 epoch + 1

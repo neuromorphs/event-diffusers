@@ -68,10 +68,35 @@ butterfly_dataset = load_dataset("huggan/smithsonian_butterflies_subset", split=
 
 def transform(examples):
     images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-    return {"images": images}
+    return {"data": images, "label": [torch.squeeze(
+                torch.nn.functional.one_hot(torch.as_tensor([0]), num_classes=10))] * len(images)}
 
 
 butterfly_dataset.set_transform(transform)
+
+#################
+# MNIST Dataset #
+#################
+
+preprocess = transforms.Compose(
+    [
+        transforms.Resize((config.image_size, config.image_size)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5]),
+    ]
+)
+
+mnist_dataset = load_dataset("mnist", split="train")
+
+
+def transform(examples):
+    images = [preprocess(image) for image in examples["image"]]
+    labels = [torch.squeeze(
+                torch.nn.functional.one_hot(torch.as_tensor([label]), num_classes=10)) for label in examples["label"]]
+    return {"data": images, "label": labels}
+
+mnist_dataset.set_transform(transform)
 
 ###################
 # Gesture Dataset #

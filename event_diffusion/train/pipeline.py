@@ -18,6 +18,7 @@ class DDPMConditionalPipeline(DDPMPipeline):
         self,
         batch_size: int = 1,
         label: int = 0,
+        num_classes: Optional[int] = None,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         num_inference_steps: int = 1000,
         output_type: Optional[str] = "pil",
@@ -71,11 +72,14 @@ class DDPMConditionalPipeline(DDPMPipeline):
         self.scheduler.set_timesteps(num_inference_steps)
 
         for t in self.progress_bar(self.scheduler.timesteps):
-            label_oh = torch.squeeze(
-                torch.nn.functional.one_hot(torch.as_tensor([label]), num_classes=11)
-            )
-            label_oh = label_oh.repeat(batch_size, 1)
-            emb = embed(self.embed_model, label_oh, self.embed_device)
+            if num_classes is None:
+                emb = None
+            else:
+                label_oh = torch.squeeze(
+                    torch.nn.functional.one_hot(torch.as_tensor([label]), num_classes=num_classes)
+                )
+                label_oh = label_oh.repeat(batch_size, 1)
+                emb = embed(self.embed_model, label_oh, self.embed_device)
             # 1. predict noise model_output
             model_output = self.unet(image, t, encoder_hidden_states=emb).sample
 

@@ -7,15 +7,32 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from PIL import Image
 
 from event_diffusion.train.config import TrainingConfig
-from event_diffusion.train.data import butterfly_dataset, davis_dataset, gesture_dataset
+from event_diffusion.train.data import butterfly_dataset, davis_dataset, gesture_dataset, mnist_dataset
 from event_diffusion.train.embed import EmbedFC
 from event_diffusion.train.loop import train_loop
 from event_diffusion.train.model import condition_model, model
 
-# dataset = datasets.Dataset.from_dict(gesture_dataset[:16]).with_format("torch")
-dataset = gesture_dataset
+config = TrainingConfig()
 
-embed_model = EmbedFC(11, 1280)
+
+if config.dataset == "gesture":
+    dataset = gesture_dataset
+    num_classes = 11
+elif config.dataset == "butterfly":
+    dataset = butterfly_dataset
+    num_classes = 10
+elif config.dataset == "mnist":
+    dataset = mnist_dataset
+    num_classes = 10
+elif config.dataset == "davis":
+    dataset = davis_dataset
+else:
+    raise ValueError(f"Unknown dataset {config.dataset}")
+
+if config.debug:
+    dataset = datasets.Dataset.from_dict(dataset[:16]).with_format("torch")
+
+embed_model = EmbedFC(num_classes, 1280)
 
 sample_image = dataset[0]["data"]
 sample_label = dataset[0]["label"]
@@ -33,9 +50,8 @@ print(
     ).sample.shape,
 )
 
-config = TrainingConfig()
 
-noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
+noise_scheduler = DDPMScheduler(num_train_timesteps=config.num_train_timesteps)
 
 train_dataloader = torch.utils.data.DataLoader(
     dataset, batch_size=config.train_batch_size, shuffle=True

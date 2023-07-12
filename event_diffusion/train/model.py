@@ -35,11 +35,12 @@ model = UNet2DModel(
     ),
 )
 
+
 condition_model = UNet2DConditionModel(
     sample_size=config.image_size,  # the target image resolution
     addition_embed_type="text",  # the type of additional embedding to use
-    in_channels=2,  # the number of input channels, 3 for RGB images
-    out_channels=2,  # the number of output channels
+    in_channels=config.channels,  # the number of input channels, 3 for RGB images
+    out_channels=config.channels,  # the number of output channels
     layers_per_block=2,  # how many ResNet layers to use per UNet block
     block_out_channels=(
         128,
@@ -66,3 +67,7 @@ condition_model = UNet2DConditionModel(
         "UpBlock2D",
     ),
 )
+
+
+if config.conditional:
+    model = condition_model
