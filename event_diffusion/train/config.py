@@ -1,4 +1,4 @@
-from diffusers import get_cosine_with_hard_restarts_schedule_with_warmup, get_linear_schedule_with_warmup
+from diffusers.optimization import get_cosine_with_hard_restarts_schedule_with_warmup, get_linear_schedule_with_warmup
 
 from dataclasses import dataclass
 

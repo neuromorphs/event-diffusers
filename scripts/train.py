@@ -3,7 +3,7 @@ import glob
 import datasets
 import torch
 from diffusers import DDPMScheduler
-from diffusers.optimization import get_cosine_schedule_with_warmup
+from diffusers.optimization import get_cosine_with_hard_restarts_schedule_with_warmup, get_cosine_schedule_with_warmup
 from PIL import Image
 
 from event_diffusion.train.config import TrainingConfig
@@ -58,7 +58,7 @@ train_dataloader = torch.utils.data.DataLoader(
 )
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
-lr_scheduler = config.lr_scheduler(
+lr_scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(
     optimizer=optimizer,
     num_warmup_steps=config.lr_warmup_steps,
     num_training_steps=(len(train_dataloader) * config.num_epochs),
