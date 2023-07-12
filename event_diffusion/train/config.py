@@ -14,7 +14,7 @@ class TrainingConfig:
     eval_batch_size = 16  # how many images to sample during evaluation
     num_train_timesteps = 1000
     num_eval_inference_steps = 1000
-    eval_label = 1  # the label to see images of during evaluation
+    eval_label = 2  # the label to see images of during evaluation
     num_epochs = 100
     gradient_accumulation_steps = 1
     learning_rate = 4e-4

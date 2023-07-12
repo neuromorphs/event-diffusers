@@ -81,7 +81,6 @@ butterfly_dataset.set_transform(transform)
 preprocess = transforms.Compose(
     [
         transforms.Resize((config.image_size, config.image_size)),
-        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5]),
     ]
