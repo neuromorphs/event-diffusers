@@ -1,3 +1,5 @@
+from diffusers import get_cosine_with_hard_restarts_schedule_with_warmup, get_linear_schedule_with_warmup
+
 from dataclasses import dataclass
 
 
@@ -17,12 +19,14 @@ class TrainingConfig:
     eval_label = 2  # the label to see images of during evaluation
     num_epochs = 100
     gradient_accumulation_steps = 1
-    learning_rate = 4e-4
-    lr_warmup_steps = 500
     save_image_epochs = 1
     save_model_epochs = 10
+    learning_rate = 4e-4
+    lr_warmup_steps = 500
+    lr_scheduler = get_cosine_with_hard_restarts_schedule_with_warmup
+    lr_kwargs = {"num_cycles": 10, "last_epoch": -1}
     mixed_precision = "no"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = "conditional-mnist"  # where to save the trained model
+    output_dir = "conditional-mnist-2"  # where to save the trained model
 
     push_to_hub = False  # whether to upload the saved model to the HF Hub
     hub_private_repo = False
