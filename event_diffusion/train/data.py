@@ -110,6 +110,7 @@ transform = tonic.transforms.Compose([
         sensor_size=trainset.sensor_size, dt=frame_time, tau=frame_time / 10
     ),
     lambda x: torch.as_tensor(x),
+    transforms.Resize((config.image_size, config.image_size)),
     torchvision.transforms.Normalize([0.5], [0.5]),
 ])
 gesture_dataset = tonic.SlicedDataset(

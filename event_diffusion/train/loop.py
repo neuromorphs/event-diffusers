@@ -60,7 +60,7 @@ def train_loop(
                 labels = batch["label"]
                 emb = embed(embed_model, labels, accelerator.device)
             # Sample noise to add to the images
-            noise = torch.randn(clean_images.shape).to(clean_images.device) / 2.5
+            noise = torch.randn(clean_images.shape).to(clean_images.device) / 4
             bs = clean_images.shape[0]
 
             # Sample a random timestep for each image
