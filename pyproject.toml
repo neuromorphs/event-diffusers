@@ -17,6 +17,10 @@ accelerate = "^0.20.3"
 datasets = "^2.13.1"
 tensorboard = "^2.13.0"
 chardet = "^5.1.0"
+fastprogress = "^1.0.3"
+wandb = "^0.15.5"
+kaggle = "^1.5.15"
+fastdownload = "^0.0.7"
 
 
 [tool.poetry.group.dev.dependencies]

@@ -9,6 +9,7 @@ import argparse, logging, copy
 from types import SimpleNamespace
 from contextlib import nullcontext
 
+from accelerate import Accelerator, DistributedDataParallelKwargs
 import torch
 from torch import optim
 import torch.nn as nn
@@ -20,26 +21,31 @@ from utils import *
 from modules import UNet_conditional, EMA
 
 
-config = SimpleNamespace(    
+config = SimpleNamespace(
+    debug = True,
     run_name = "DDPM_conditional",
     epochs = 100,
     noise_steps=500,
     seed = 42,
-    batch_size = 4,
+    batch_size = 20,
     img_size = 64,
     num_classes = 11,
-    dataset_path = get_dvs_gesture(), #get_cifar(img_size=64),
+    dataset_path = get_dvs_gesture(), # get_cifar(img_size=64),
     train_folder = "train",
     val_folder = "test",
     device = "cuda",
     slice_size = 1,
     do_validation = True,
     fp16 = True,
-    log_every_epoch = 10,
+    log_every_epoch = 1,
     num_workers=10,
     c_in = 3,
     c_out = 3,
-    lr = 5e-3)
+    lr = 5e-3,
+    gradient_accumulation_steps = 1,
+    mixed_precision = "no",
+    output_dir = "conditional-gesture-1",
+)
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO, datefmt="%I:%M:%S")
@@ -70,71 +76,90 @@ class Diffusion:
 
     def noise_images(self, x, t):
         "Add noise to images at instant t"
+        self.alpha_hat = self.alpha_hat.to(self.accelerator.device)
         sqrt_alpha_hat = torch.sqrt(self.alpha_hat[t])[:, None, None, None]
         sqrt_one_minus_alpha_hat = torch.sqrt(1 - self.alpha_hat[t])[:, None, None, None]
         Ɛ = torch.randn_like(x)
         return sqrt_alpha_hat * x + sqrt_one_minus_alpha_hat * Ɛ, Ɛ
     
-    @torch.inference_mode()
+    # @torch.inference_mode()
     def sample(self, use_ema, labels, cfg_scale=3):
+        self.alpha = self.alpha.to(self.accelerator.device)
+        self.beta = self.beta.to(self.accelerator.device)
         model = self.ema_model if use_ema else self.model
+        model = self.accelerator.unwrap_model(model)
         n = len(labels)
         logging.info(f"Sampling {n} new images....")
         model.eval()
-        with torch.inference_mode():
-            x = torch.randn((n, self.c_in, self.img_size, self.img_size)).to(self.device)
-            for i in progress_bar(reversed(range(1, self.noise_steps)), total=self.noise_steps-1, leave=False):
-                t = (torch.ones(n) * i).long().to(self.device)
-                predicted_noise = model(x, t, labels)
-                if cfg_scale > 0:
-                    uncond_predicted_noise = model(x, t, None)
-                    predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
-                alpha = self.alpha[t][:, None, None, None]
-                alpha_hat = self.alpha_hat[t][:, None, None, None]
-                beta = self.beta[t][:, None, None, None]
-                if i > 1:
-                    noise = torch.randn_like(x)
-                else:
-                    noise = torch.zeros_like(x)
-                x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
+        # with torch.inference_mode():
+        x = torch.randn((n, self.c_in, self.img_size, self.img_size)).to(self.accelerator.device)
+        for i in progress_bar(reversed(range(1, self.noise_steps)), total=self.noise_steps-1, leave=False):
+            t = (torch.ones(n) * i).long().to(self.accelerator.device)
+            predicted_noise = model(x, t, labels)
+            if cfg_scale > 0:
+                uncond_predicted_noise = model(x, t, None)
+                predicted_noise = torch.lerp(uncond_predicted_noise, predicted_noise, cfg_scale)
+            alpha = self.alpha[t][:, None, None, None]
+            alpha_hat = self.alpha_hat[t][:, None, None, None]
+            beta = self.beta[t][:, None, None, None]
+            if i > 1:
+                noise = torch.randn_like(x)
+            else:
+                noise = torch.zeros_like(x)
+            noise = noise.to(self.accelerator.device)
+            x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
         x = (x.clamp(-1, 1) + 1) / 2
         x = (x * 255).type(torch.uint8)
         return x
 
     def train_step(self, loss):
-        self.optimizer.zero_grad()
-        self.scaler.scale(loss).backward()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
-        self.ema.step_ema(self.ema_model, self.model)
+        self.accelerator.backward(loss)
+        self.accelerator.clip_grad_norm_(self.model.parameters(), 1.0)
+        self.optimizer.step()
         self.scheduler.step()
+        self.optimizer.zero_grad()
+        # self.scaler.scale(loss).backward()
+        # self.scaler.step(self.optimizer)
+        # self.scaler.update()
+        # self.ema.step_ema(self.ema_model, self.model)
 
-    def one_epoch(self, train=True):
+    def one_epoch(self, train=True, global_step=0):
+
         avg_loss = 0.
         if train: self.model.train()
         else: self.model.eval()
         pbar = progress_bar(self.train_dataloader, leave=False)
         for i, (images, labels) in enumerate(pbar):
-            with torch.autocast("cuda") and (torch.inference_mode() if not train else torch.enable_grad()):
-                images = images.to(self.device)
-                labels = labels.to(self.device)
-                t = self.sample_timesteps(images.shape[0]).to(self.device)
+            if self.parsed_args.debug:
+                if i > 10: break
+            with self.accelerator.accumulate(self.model):
+                # with torch.autocast("cuda") and (torch.inference_mode() if not train else torch.enable_grad()):
+                images = images.to(self.accelerator.device)
+                labels = labels.to(self.accelerator.device)
+                t = self.sample_timesteps(images.shape[0]).to(self.accelerator.device)
                 x_t, noise = self.noise_images(images, t)
                 if np.random.random() < 0.1:
                     labels = None
                 predicted_noise = self.model(x_t, t, labels)
                 loss = self.mse(noise, predicted_noise)
-                avg_loss += loss
-            if train:
-                self.train_step(loss)
-                wandb.log({"train_mse": loss.item(),
-                            "learning_rate": self.scheduler.get_last_lr()[0]})
-            pbar.comment = f"MSE={loss.item():2.3f}"        
-        return avg_loss.mean().item()
+                avg_loss += loss.item()
+                if train:
+                    self.train_step(loss)
+                    logs = {
+                        "loss": loss.detach().item(),
+                        "lr": self.scheduler.get_last_lr()[0],
+                        "step": global_step,
+                    }
+                    self.accelerator.log(logs, step=global_step)
+                    wandb.log({"train_mse": loss.item(),
+                                "learning_rate": self.scheduler.get_last_lr()[0]})
+                    global_step += 1
+                pbar.comment = f"MSE={loss.item():2.3f}"        
+        return avg_loss / len(self.train_dataloader), global_step
 
     def log_images(self):
         "Log images to wandb and save them to disk"
-        labels = torch.arange(self.num_classes).long().to(self.device)
+        labels = torch.arange(self.num_classes).long().to(self.accelerator.device)
         sampled_images = self.sample(use_ema=False, labels=labels)
         wandb.log({"sampled_images":     [wandb.Image(img.permute(1,2,0).squeeze().cpu().numpy()) for img in sampled_images]})
 
@@ -163,13 +188,36 @@ class Diffusion:
         self.scheduler = optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=args.lr, 
                                                  steps_per_epoch=len(self.train_dataloader), epochs=args.epochs)
         self.mse = nn.MSELoss()
-        self.ema = EMA(0.995)
-        self.scaler = torch.cuda.amp.GradScaler()
+        # self.ema = EMA(0.995)
+        # self.scaler = torch.cuda.amp.GradScaler()
+
+        ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+        self.accelerator = Accelerator(
+            mixed_precision=args.mixed_precision,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            log_with="tensorboard",
+            project_dir=os.path.join(args.output_dir, "logs"),
+            kwargs_handlers=[ddp_kwargs],
+        )
+        if self.accelerator.is_main_process:
+            if args.output_dir is not None:
+                os.makedirs(args.output_dir, exist_ok=True)
+            self.accelerator.init_trackers("train_example")
+
+        # Prepare everything
+        # There is no specific order to remember, you just need to unpack the
+        # objects in the same order you gave them to the prepare method.
+        self.model, self.optimizer, self.train_dataloader, self.scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.train_dataloader, self.scheduler
+        )
 
     def fit(self, args):
+        self.args = parse_args
+        self.parsed_args = args
+        global_step = 0
         for epoch in progress_bar(range(args.epochs), total=args.epochs, leave=True):
             logging.info(f"Starting epoch {epoch}:")
-            _  = self.one_epoch(train=True)
+            _, global_step = self.one_epoch(train=True, global_step=global_step)
             
             ## validation
             if args.do_validation:

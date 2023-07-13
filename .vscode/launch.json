@@ -11,6 +11,14 @@
             "program": "scripts/train.py",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "ddpm_conditional.py",
+            "type": "python",
+            "request": "launch",
+            "program": "ddpm_conditional.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }

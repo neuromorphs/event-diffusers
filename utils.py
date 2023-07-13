@@ -45,7 +45,7 @@ def get_alphabet(args):
 
 def get_cifar(cifar100=False, img_size=64):
     "Download and extract CIFAR"
-    cifar10_url = 'https://s3.amazonaws.com/fast-ai-sample/cifar10.tgz'
+    cifar10_url = 'http://s3.amazonaws.com/fast-ai-sample/cifar10.tgz'
     cifar100_url = 'https://s3.amazonaws.com/fast-ai-imageclas/cifar100.tgz'
     if img_size==32:
         return untar_data(cifar100_url if cifar100 else cifar10_url)
